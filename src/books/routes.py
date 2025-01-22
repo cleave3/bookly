@@ -23,7 +23,7 @@ async def create_book(
     return new_book
 
 
-@book_router.patch("/{book_id}")
+@book_router.patch("/{book_id}", response_model=Book)
 async def update_book(
     book_id: str,
     book_data: BookUpdateModel,
@@ -54,7 +54,7 @@ async def get_book(book_id: str, session: AsyncSession = Depends(get_session)) -
 
 @book_router.delete("/{book_id}")
 async def delete_book(
-    book_id: int, session: AsyncSession = Depends(get_session)
+    book_id: str, session: AsyncSession = Depends(get_session)
 ) -> dict:
     book = await book_service.delete_book(book_id, session)
 
