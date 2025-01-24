@@ -1,8 +1,11 @@
 from datetime import date, datetime
 
 # from typing import Optional
+from typing import Optional
 import uuid
 from pydantic import BaseModel
+
+from src.auth.models import User
 
 
 class Book(BaseModel):
@@ -14,6 +17,7 @@ class Book(BaseModel):
     language: str
     created_at: datetime
     updated_at: datetime
+    # user: Optional[User]
 
 
 class BookCreateModel(BaseModel):
