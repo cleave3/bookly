@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio.session import AsyncSession
 from typing import List
-from .schemas import Book, BookCreateModel, BookUpdateModel
+from .schemas import Book, BookCreateModel, BookDetailModel, BookUpdateModel
 from .service import BookService
 from src.db.main import get_session
 from src.auth.dependencies import AcessTokenBearer, RoleChecker
+from src.errors import BookNotFound
 
 book_router = APIRouter()
 book_service = BookService()
@@ -40,9 +41,7 @@ async def update_book(
     book = await book_service.update_book(book_id, book_data, session)
 
     if not book:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Book not found"
-        )
+        raise BookNotFound()
 
     return book
 
@@ -66,16 +65,14 @@ async def get_user_book_submissions(
 @book_router.get(
     "/{book_id}",
     status_code=status.HTTP_200_OK,
-    response_model=Book,
+    response_model=BookDetailModel,
     dependencies=[role_checker, auth_user],
 )
 async def get_book(book_id: str, session: AsyncSession = Depends(get_session)) -> dict:
     book = await book_service.get_book_by_id(book_id, session)
 
     if not book:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Book not found"
-        )
+        raise BookNotFound()
 
     return book
 
@@ -87,8 +84,6 @@ async def delete_book(
     book = await book_service.delete_book(book_id, session)
 
     if not book:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Book not found"
-        )
+        raise BookNotFound()
 
     return {"message": "Book deleted successfully"}

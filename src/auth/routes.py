@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from fastapi.responses import JSONResponse
 
 from src.db.redis import add_jti_to_block_list
@@ -9,6 +9,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .utils import create_access_token, verify_password
 from .dependencies import RefreshTokenBearer, AcessTokenBearer, get_current_user
 import datetime
+from src.errors import (
+    InvalidCredentials,
+    UserAlreadyExists,
+    AccountNotVerified,
+    UserNotFound,
+    InvalidToken,
+)
 
 
 auth_router = APIRouter()
@@ -26,10 +33,7 @@ async def create_user_account(
     user_exists = await user_service.user_exists(email, session)
 
     if user_exists:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User with this email already exists.",
-        )
+        raise UserAlreadyExists()
 
     new_user = await user_service.create_user(user_data, session)
 
@@ -46,16 +50,10 @@ async def login(
     user = await user_service.get_user_by_email(email, session)
 
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="invalid login credentials",
-        )
+        raise InvalidCredentials()
 
     if not verify_password(password, user.password_hash):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="invalid login credentials",
-        )
+        raise InvalidCredentials()
 
     access_token = create_access_token(
         data={"email": email, "uid": str(user.uid), "role": user.role}
@@ -85,21 +83,15 @@ async def refresh_token(
     session: AsyncSession = Depends(get_session),
 ):
     if datetime.fromtimestamp(token_data["exp"]) > datetime.now():
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Token expired"
-        )
+        raise InvalidToken()
 
     if token_data is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid token"
-        )
+        raise InvalidToken()
 
     user = await user_service.get_user_by_email(token_data["user"]["email"], session)
 
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN, detail="Invalid Token"
-        )
+        raise InvalidToken()
 
     access_token = create_access_token(data=token_data["user"], refresh=False)
 

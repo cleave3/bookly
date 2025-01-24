@@ -1,9 +1,17 @@
 from datetime import date, datetime
 
 # from typing import Optional
-from typing import Optional
+from typing import List, Optional
 import uuid
 from pydantic import BaseModel
+
+from src.db.models import User
+
+
+class BookReviewModel(BaseModel):
+    rating: int
+    comment: str
+    created_at: datetime
 
 
 class Book(BaseModel):
@@ -15,7 +23,11 @@ class Book(BaseModel):
     language: str
     created_at: datetime
     updated_at: datetime
-    # user: Optional[User]
+
+
+class BookDetailModel(Book):
+    reviews: List[BookReviewModel]
+    user: Optional[User]
 
 
 class BookCreateModel(BaseModel):

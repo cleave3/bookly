@@ -12,6 +12,10 @@ class AuthService:
         user = await session.exec(select(User).where(User.email == email))
         return user.first()
 
+    async def get_user_by_id(self, uid: str, session: AsyncSession) -> User | None:
+        user = await session.exec(select(User).where(User.uid == uid))
+        return user.first()
+
     # @staticmethod
     async def user_exists(self, email: str, session: AsyncSession) -> bool:
         user = await self.get_user_by_email(email, session)
