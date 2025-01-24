@@ -57,12 +57,18 @@ class TokenBearer(HTTPBearer):
 class AcessTokenBearer(TokenBearer):
     def verify_token(self, token_data: dict) -> None:
 
+        if not token_data:
+            raise InvalidToken()
+
         if token_data and token_data["refresh"]:
             raise AccessTokenRequired()
 
 
 class RefreshTokenBearer(TokenBearer):
     def verify_token(self, token_data: dict) -> None:
+
+        # if not token_data:
+        #     raise InvalidToken()
 
         if token_data and not token_data["refresh"]:
             raise RefreshTokenRequired()

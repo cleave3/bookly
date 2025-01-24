@@ -82,8 +82,8 @@ async def refresh_token(
     token_data: dict = Depends(RefreshTokenBearer()),
     session: AsyncSession = Depends(get_session),
 ):
-    if datetime.fromtimestamp(token_data["exp"]) > datetime.now():
-        raise InvalidToken()
+    # if datetime.fromtimestamp(token_data["exp"]) > datetime.now():
+    #     raise InvalidToken()
 
     if token_data is None:
         raise InvalidToken()
