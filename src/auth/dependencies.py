@@ -2,7 +2,8 @@ from typing import List, Optional
 from fastapi import Depends, Request, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 
-from src.auth.models import User
+from src.db.models import User
+
 from .utils import decode_access_token
 from src.db.redis import token_in_blocklist
 from sqlmodel.ext.asyncio.session import AsyncSession

@@ -5,8 +5,6 @@ from typing import Optional
 import uuid
 from pydantic import BaseModel
 
-from src.auth.models import User
-
 
 class Book(BaseModel):
     uid: uuid.UUID
