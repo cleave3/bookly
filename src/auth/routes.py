@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, status, HTTPException
+from fastapi import APIRouter, Depends, status, HTTPException, BackgroundTasks
 from fastapi.responses import JSONResponse
 
 from src.db.redis import add_jti_to_block_list
@@ -24,7 +24,9 @@ from .utils import (
 from .dependencies import RefreshTokenBearer, AcessTokenBearer, get_current_user
 from src.errors import InvalidCredentials, UserAlreadyExists, InvalidToken, UserNotFound
 from src.config import Config
-from src.mail import mail, create_message
+
+# from src.mail import mail, create_message
+from src.celery_tasks import send_email
 
 
 auth_router = APIRouter()
@@ -34,15 +36,16 @@ user_service = AuthService()
 @auth_router.post("/send-email")
 async def send_email(emails: EmailModel):
     try:
-        recipients = emails.addresses
+        # recipients = emails.addresses
 
-        html = """
-            <h1>Welcome to Bookly</h1>
-        """
+        # html = """
+        #     <h1>Welcome to Bookly</h1>
+        # """
 
-        message = create_message(recipients=recipients, subject="Welcome", body=html)
+        # send_email.delay(recipients=recipients, subject="Welcome", body=html)
+        # message = create_message(recipients=recipients, subject="Welcome", body=html)
 
-        await mail.send_message(message=message)
+        # await mail.send_message(message=message)
 
         return {"message": "Email sent successfully"}
     except Exception as e:
@@ -55,7 +58,9 @@ async def send_email(emails: EmailModel):
     "/signup", status_code=status.HTTP_201_CREATED, response_model=SignUpResponseModel
 )
 async def create_user_account(
-    user_data: UserCreateModel, session: AsyncSession = Depends(get_session)
+    user_data: UserCreateModel,
+    bg_task: BackgroundTasks,
+    session: AsyncSession = Depends(get_session),
 ):
     email = user_data.email
 
@@ -66,16 +71,19 @@ async def create_user_account(
 
     new_user = await user_service.create_user(user_data, session)
 
-    link = f"{Config.BASE_URL}/api/v1/auth/verify/{create_url_safe_token({"email": email})}"
+    # link = f"{Config.BASE_URL}/api/v1/auth/verify/{create_url_safe_token({"email": email})}"
 
-    html_msg = f"""
-        <h1>Verify your Email</h1>
-        <p>Please click <a href="{link}">here</a> to verify your email</p>
-    """
+    # html = f"""
+    #     <h1>Verify your Email</h1>
+    #     <p>Please click <a href="{link}">here</a> to verify your email</p>
+    # """
 
+    # send_email.delay(recipients=[email], subject="Welcome", body=html)
     # message = create_message(recipients=[email], subject="Verify Your Email", body=html_msg)
 
-    print(html_msg)
+    # # print(html_msg)
+
+    # bg_task.add_task(mail.send_message, html_msg)
 
     return {
         "message": "Signup successful, Please check your email to verify your account",

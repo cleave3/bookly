@@ -22,9 +22,9 @@ role_checker = Depends(RoleChecker(["user"]))
 async def create_book(
     book: BookCreateModel,
     session: AsyncSession = Depends(get_session),
-    auth: dict = auth_user,
+    auth_user: dict = auth_user,
 ) -> dict:
-    user_uid = auth.get("user")["uid"]
+    user_uid = auth_user.get("user")["uid"]
     new_book = await book_service.create_book(book, user_uid, session)
     return new_book
 
