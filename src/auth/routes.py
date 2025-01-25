@@ -1,29 +1,58 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, status, HTTPException
 from fastapi.responses import JSONResponse
 
 from src.db.redis import add_jti_to_block_list
-from .schemas import UserCreateModel, UserModel, UserLoginModel, UserBooks
+from .schemas import (
+    EmailModel,
+    PasswordResetConfirmModel,
+    PasswordResetRequestModel,
+    SignUpResponseModel,
+    UserCreateModel,
+    UserLoginModel,
+    UserBooks,
+)
 from .service import AuthService
 from src.db.main import get_session
 from sqlalchemy.ext.asyncio import AsyncSession
-from .utils import create_access_token, verify_password
-from .dependencies import RefreshTokenBearer, AcessTokenBearer, get_current_user
-import datetime
-from src.errors import (
-    InvalidCredentials,
-    UserAlreadyExists,
-    AccountNotVerified,
-    UserNotFound,
-    InvalidToken,
+from .utils import (
+    create_access_token,
+    verify_password,
+    create_url_safe_token,
+    decode_url_safe_token,
+    get_password_hash,
 )
+from .dependencies import RefreshTokenBearer, AcessTokenBearer, get_current_user
+from src.errors import InvalidCredentials, UserAlreadyExists, InvalidToken, UserNotFound
+from src.config import Config
+from src.mail import mail, create_message
 
 
 auth_router = APIRouter()
 user_service = AuthService()
 
 
+@auth_router.post("/send-email")
+async def send_email(emails: EmailModel):
+    try:
+        recipients = emails.addresses
+
+        html = """
+            <h1>Welcome to Bookly</h1>
+        """
+
+        message = create_message(recipients=recipients, subject="Welcome", body=html)
+
+        await mail.send_message(message=message)
+
+        return {"message": "Email sent successfully"}
+    except Exception as e:
+        print(e)
+        {"message": e}
+        # raise InternalServerError()
+
+
 @auth_router.post(
-    "/signup", status_code=status.HTTP_201_CREATED, response_model=UserModel
+    "/signup", status_code=status.HTTP_201_CREATED, response_model=SignUpResponseModel
 )
 async def create_user_account(
     user_data: UserCreateModel, session: AsyncSession = Depends(get_session)
@@ -37,7 +66,21 @@ async def create_user_account(
 
     new_user = await user_service.create_user(user_data, session)
 
-    return new_user
+    link = f"{Config.BASE_URL}/api/v1/auth/verify/{create_url_safe_token({"email": email})}"
+
+    html_msg = f"""
+        <h1>Verify your Email</h1>
+        <p>Please click <a href="{link}">here</a> to verify your email</p>
+    """
+
+    # message = create_message(recipients=[email], subject="Verify Your Email", body=html_msg)
+
+    print(html_msg)
+
+    return {
+        "message": "Signup successful, Please check your email to verify your account",
+        "user": new_user,
+    }
 
 
 @auth_router.post("/login", status_code=status.HTTP_200_OK)
@@ -54,6 +97,12 @@ async def login(
 
     if not verify_password(password, user.password_hash):
         raise InvalidCredentials()
+
+    # if not user.is_verified:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_403_FORBIDDEN,
+    #         detail="Please verify your email to proceed",
+    #     )
 
     access_token = create_access_token(
         data={"email": email, "uid": str(user.uid), "role": user.role}
@@ -73,6 +122,35 @@ async def login(
                 "email": email,
             },
         },
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@auth_router.get("/verify/{token}")
+async def verify_user_account(token: str, session: AsyncSession = Depends(get_session)):
+    token_data = decode_url_safe_token(token)
+
+    user_email = token_data.get("email")
+
+    if not user_email:
+        raise UserNotFound()
+
+    user = await user_service.get_user_by_email(email=user_email, session=session)
+
+    if not user:
+        raise UserNotFound()
+
+    if user.is_verified:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="user already verified"
+        )
+
+    await user_service.update_user(
+        user=user, user_data={"is_verified": True}, session=session
+    )
+
+    return JSONResponse(
+        content={"message": "Account verified sucessfully"},
         status_code=status.HTTP_200_OK,
     )
 
@@ -114,4 +192,65 @@ async def logout(token_data: dict = Depends(AcessTokenBearer())):
     return JSONResponse(
         content={"message": "Logout successful"},
         status_code=status.HTTP_200_OK,
+    )
+
+
+@auth_router.post("/password-reset-request")
+async def password_reset_request(email_data: PasswordResetRequestModel):
+    email = email_data.email
+
+    token = create_url_safe_token({"email": email})
+
+    link = f"http://{Config.DOMAIN}/api/v1/auth/password-reset-confirm/{token}"
+
+    html_message = f"""
+    <h1>Reset Your Password</h1>
+    <p>Please click this <a href="{link}">link</a> to Reset Your Password</p>
+    """
+    subject = "Reset Your Password"
+
+    send_email.delay([email], subject, html_message)
+    return JSONResponse(
+        content={
+            "message": "Please check your email for instructions to reset your password",
+        },
+        status_code=status.HTTP_200_OK,
+    )
+
+
+@auth_router.post("/password-reset-confirm/{token}")
+async def reset_account_password(
+    token: str,
+    passwords: PasswordResetConfirmModel,
+    session: AsyncSession = Depends(get_session),
+):
+    new_password = passwords.new_password
+    confirm_password = passwords.confirm_new_password
+
+    if new_password != confirm_password:
+        raise HTTPException(
+            detail="Passwords do not match", status_code=status.HTTP_400_BAD_REQUEST
+        )
+
+    token_data = decode_url_safe_token(token)
+
+    user_email = token_data.get("email")
+
+    if user_email:
+        user = await user_service.get_user_by_email(user_email, session)
+
+        if not user:
+            raise UserNotFound()
+
+        passwd_hash = get_password_hash(new_password)
+        await user_service.update_user(user, {"password_hash": passwd_hash}, session)
+
+        return JSONResponse(
+            content={"message": "Password reset Successfully"},
+            status_code=status.HTTP_200_OK,
+        )
+
+    return JSONResponse(
+        content={"message": "Error occured during password reset."},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
     )

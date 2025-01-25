@@ -18,6 +18,11 @@ class UserModel(BaseModel):
     updated_at: datetime
 
 
+class SignUpResponseModel(BaseModel):
+    message: str
+    user: UserModel
+
+
 class UserBooks(UserModel):
     books: List[Book]
     reviews: List[BookReviewModel]
@@ -56,3 +61,16 @@ class UserLoginModel(BaseModel):
 #     access_token: str
 #     refresh_token: str
 #     user: dict[str, str]
+
+
+class EmailModel(BaseModel):
+    addresses: List[str]
+
+
+class PasswordResetRequestModel(BaseModel):
+    email: str
+
+
+class PasswordResetConfirmModel(BaseModel):
+    new_password: str
+    confirm_new_password: str
